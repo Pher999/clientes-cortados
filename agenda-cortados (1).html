@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda de Cortados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #0c1622;
+    --panel: #121e2e;
+    --panel-2: #182741;
+    --line: #24354e;
+    --ink: #eaf1f7;
+    --ink-dim: #93a5bd;
+    --cyan: #35c2b8;
+    --cyan-dim: #1f7a72;
+    --amber: #f0a94e;
+    --red: #e2665a;
+    --radius: 14px;
+    font-size: 16px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  header.top{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--cyan); margin: 0 0 6px;
+  }
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 30px; margin:0; font-weight:700; letter-spacing:-0.01em;
+  }
+  .sub{ color: var(--ink-dim); font-size: 13.5px; margin-top:6px; max-width: 46ch;}
+
+  .stats{ display:flex; gap: 18px; }
+  .stat{ text-align:right; }
+  .stat b{ font-family:'JetBrains Mono', monospace; font-size: 22px; display:block; color: var(--ink);}
+  .stat span{ font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing:.06em;}
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+
+  .drop{
+    border: 1.5px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 26px 20px;
+    text-align:center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    background: var(--panel-2);
+  }
+  .drop:hover, .drop.drag{ border-color: var(--cyan); background: #163049; }
+  .drop svg{ width:26px; height:26px; color: var(--cyan); margin-bottom:8px;}
+  .drop p{ margin:0; font-size: 14px; color: var(--ink); font-weight:500;}
+  .drop small{ color: var(--ink-dim); font-size: 12px; }
+  input[type=file]{ display:none; }
+
+  .queue{ margin-top: 14px; display:flex; flex-direction:column; gap:8px; }
+  .qitem{
+    display:flex; align-items:center; gap:10px;
+    font-family:'JetBrains Mono', monospace; font-size:12.5px; color: var(--ink-dim);
+    background: var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+  }
+  .qitem .bar{ flex:1; height:4px; background:#0c1622; border-radius:2px; overflow:hidden; }
+  .qitem .bar i{ display:block; height:100%; width:0%; background: var(--cyan); transition: width .2s; }
+  .qitem.ok{ color: #7fe0c9; }
+  .qitem.err{ color: var(--red); }
+
+  .toolbar{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    margin-bottom: 12px;
+  }
+  .toolbar .left{ display:flex; gap:10px; align-items:center; }
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px;
+    border-radius: 9px; padding: 9px 14px; border:1px solid var(--line);
+    background: var(--panel-2); color: var(--ink); cursor:pointer;
+    display:inline-flex; align-items:center; gap:7px;
+  }
+  .btn:hover{ border-color:#3a5170; }
+  .btn.primary{ background: var(--cyan); border-color: var(--cyan); color:#062824; }
+  .btn.primary:hover{ background:#48d1c7; }
+  .btn.ghost{ background: transparent; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  table{ width:100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+    color: var(--ink-dim); font-weight:600; padding: 0 10px 8px; border-bottom:1px solid var(--line);
+  }
+  tbody td{ padding: 9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:hover{ background: rgba(255,255,255,.02); }
+  .contrato{ font-family:'JetBrains Mono', monospace; color: var(--cyan); font-weight:700; white-space:nowrap; }
+  .sub-id{ display:block; color: var(--ink-dim); font-size:10.5px; font-weight:400; }
+  input.cell{
+    width:100%; background:transparent; border:1px solid transparent; border-radius:6px;
+    color: var(--ink); font-family:'Inter',sans-serif; font-size:13.5px; padding:6px 7px;
+  }
+  input.cell:hover{ border-color: var(--line); }
+  input.cell:focus{ outline:none; border-color: var(--cyan); background: var(--panel-2); }
+  input.tel{ font-family:'JetBrains Mono', monospace; min-width:130px; }
+
+  .signal{ display:flex; gap:3px; align-items:flex-end; height:16px; }
+  .signal i{ width:5px; background: #2a3c56; border-radius:1px; display:block; }
+  .signal i:nth-child(1){ height:5px; }
+  .signal i:nth-child(2){ height:9px; }
+  .signal i:nth-child(3){ height:13px; }
+  .signal i:nth-child(4){ height:16px; }
+  .signal i.on{ background: var(--cyan); }
+
+  .flags{ display:flex; gap:14px; }
+  .flag{ display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; }
+  .flag span{ font-size:9.5px; color: var(--ink-dim); text-transform:uppercase; letter-spacing:.03em; }
+  .flag input{ width:15px; height:15px; accent-color: var(--cyan); cursor:pointer; }
+
+  .del{ background:none; border:none; color: var(--ink-dim); cursor:pointer; font-size:16px; padding:4px; }
+  .del:hover{ color: var(--red); }
+
+  .empty{ text-align:center; padding: 40px 10px; color: var(--ink-dim); }
+  .empty b{ display:block; color:var(--ink); font-family:'Space Grotesk',sans-serif; font-size:16px; margin-bottom:6px;}
+
+  footer{ text-align:center; color: var(--ink-dim); font-size:11.5px; margin-top: 26px; }
+
+  @media (max-width: 760px){
+    table, thead{ display:none; }
+    tbody, tr, td{ display:block; width:100%; }
+    tbody tr{
+      background: var(--panel-2); border:1px solid var(--line); border-radius: 12px;
+      padding: 12px; margin-bottom: 10px;
+    }
+    tbody td{ border:none; padding: 5px 0; }
+    tbody td[data-label]::before{
+      content: attr(data-label); display:block; font-size:10px; text-transform:uppercase;
+      color: var(--ink-dim); letter-spacing:.05em; margin-bottom:2px;
+    }
+    .flags{ justify-content:flex-start; margin-top:4px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <p class="eyebrow" id="eyebrow">SFyC · Sucursal —</p>
+      <h1>Agenda de cortados</h1>
+      <p class="sub">Sube las capturas del listado, se extraen el número y nombre de cada suscriptor, se arma el número de contrato y llevas el seguimiento de cada llamada aquí mismo.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="statTotal">0</b><span>Clientes</span></div>
+      <div class="stat"><b id="statContact">0</b><span>Contactados</span></div>
+      <div class="stat"><b id="statInfo">0</b><span>Piden info</span></div>
+    </div>
+  </header>
+
+  <div class="panel">
+    <label class="drop" id="drop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+      <p>Sube una o varias capturas del listado de cortados</p>
+      <small>Se leen automáticamente con IA · PNG o JPG</small>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </label>
+    <div class="queue" id="queue"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="left">
+      <button class="btn" id="addManual">+ Cliente manual</button>
+      <button class="btn ghost" id="clearAll">Vaciar agenda</button>
+    </div>
+    <button class="btn primary" id="exportBtn">↓ Exportar a Excel</button>
+  </div>
+
+  <div class="panel" style="padding:0; overflow:hidden;">
+    <div style="overflow-x:auto; padding: 16px 18px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:150px;">Contrato</th>
+            <th>Nombre</th>
+            <th style="width:150px;">Teléfono</th>
+            <th style="width:120px;">Estado</th>
+            <th style="width:190px;">Seguimiento</th>
+            <th style="width:30px;"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="emptyState">
+        <b>Aún no hay clientes cargados</b>
+        Sube una captura del listado o agrega un cliente manual para empezar.
+      </div>
+    </div>
+  </div>
+
+  <footer>Los datos se guardan solo en tu cuenta, en este dispositivo/artefacto. Revisa los nombres leídos automáticamente antes de exportar.</footer>
+</div>
+
+<script>
+const SUCURSAL_DEFAULT = '325';
+const rowsBody = document.getElementById('rows');
+const emptyState = document.getElementById('emptyState');
+const eyebrow = document.getElementById('eyebrow');
+let clients = {}; // keyed by contrato
+
+function calcContrato(suscriptor, sucursal){
+  suscriptor = (suscriptor||'').replace(/\D/g,'');
+  sucursal = (sucursal||SUCURSAL_DEFAULT).replace(/\D/g,'');
+  const total = 10;
+  let padLen = total - sucursal.length - suscriptor.length;
+  if(padLen < 0) padLen = 0;
+  return sucursal + '0'.repeat(padLen) + suscriptor;
+}
+
+async function loadAll(){
+  try{
+    const list = await window.storage.list('cliente:', false);
+    if(list && list.keys){
+      for(const k of list.keys){
+        try{
+          const r = await window.storage.get(k, false);
+          if(r && r.value){
+            const c = JSON.parse(r.value);
+            clients[c.contrato] = c;
+          }
+        }catch(e){}
+      }
+    }
+  }catch(e){ console.error('load error', e); }
+  render();
+}
+
+async function persist(c){
+  try{ await window.storage.set('cliente:' + c.contrato, JSON.stringify(c), false); }
+  catch(e){ console.error('save error', e); }
+}
+
+async function removePersisted(contrato){
+  try{ await window.storage.delete('cliente:' + contrato, false); }
+  catch(e){}
+}
+
+function upsertClient(data){
+  // data: {suscriptor, sucursal, nombre}
+  const contrato = calcContrato(data.suscriptor, data.sucursal);
+  if(clients[contrato]){
+    // keep existing phone/status, only fill name if missing
+    if(!clients[contrato].nombre && data.nombre) clients[contrato].nombre = data.nombre;
+  } else {
+    clients[contrato] = {
+      contrato, suscriptor: data.suscriptor, sucursal: data.sucursal || SUCURSAL_DEFAULT,
+      nombre: data.nombre || '', telefono: '', contactado:false, contesto:false, noContesto:false, deseaInfo:false
+    };
+  }
+  persist(clients[contrato]);
+  eyebrow.textContent = 'SFyC · Sucursal ' + (clients[contrato].sucursal || SUCURSAL_DEFAULT);
+}
+
+// La tabla trae líneas de cuadrícula que confunden al OCR si se lee de corrido:
+// pierde o revuelve la columna de números. Recortando cada columna por separado
+// (suscriptor y nombre) el OCR sale limpio, y luego alineamos nombre <-> número
+// por posición vertical (cada número define la "banda" de su fila).
+const COL_SUSCRIPTOR = [0.054, 0.214];
+const COL_NOMBRE     = [0.343, 0.552];
+const ROW_AREA       = [0.16, 0.965]; // recorta encabezado de la app y barra de navegación
+
+function loadImageFromFile(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=> resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function cropToCanvas(img, xFrac, yFrac){
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const x0 = Math.floor(w * xFrac[0]), x1 = Math.floor(w * xFrac[1]);
+  const y0 = Math.floor(h * yFrac[0]), y1 = Math.floor(h * yFrac[1]);
+  const canvas = document.createElement('canvas');
+  const scale = 2; // sobre-escalar ayuda a la precisión del OCR en texto pequeño
+  canvas.width = (x1 - x0) * scale;
+  canvas.height = (y1 - y0) * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+async function ocrColumnLines(canvas){
+  const worker = await Tesseract.createWorker('spa');
+  await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const { data } = await worker.recognize(canvas);
+  await worker.terminate();
+  return (data.lines || [])
+    .map(l => ({ text: (l.text || '').trim(), y: (l.bbox.y0 + l.bbox.y1) / 2 }))
+    .filter(l => l.text.length > 0);
+}
+
+async function extractRowsFromImage(file){
+  const img = await loadImageFromFile(file);
+  const numCanvas = cropToCanvas(img, COL_SUSCRIPTOR, ROW_AREA);
+  const nameCanvas = cropToCanvas(img, COL_NOMBRE, ROW_AREA);
+  const [numLinesRaw, nameLines] = await Promise.all([
+    ocrColumnLines(numCanvas),
+    ocrColumnLines(nameCanvas)
+  ]);
+
+  const numLines = numLinesRaw
+    .map(l => ({ digits: l.text.replace(/\D/g, ''), y: l.y }))
+    .filter(l => l.digits.length >= 4 && l.digits.length <= 6)
+    .sort((a, b) => a.y - b.y);
+
+  nameLines.sort((a, b) => a.y - b.y);
+
+  const bands = numLines.map((l, i) => ({
+    suscriptor: l.digits,
+    from: i === 0 ? -Infinity : (numLines[i - 1].y + l.y) / 2,
+    to: i === numLines.length - 1 ? Infinity : (l.y + numLines[i + 1].y) / 2,
+    nameParts: []
+  }));
+  for (const nl of nameLines) {
+    const band = bands.find(b => nl.y >= b.from && nl.y < b.to);
+    if (band) band.nameParts.push(nl.text);
+  }
+  return bands.map(b => ({
+    suscriptor: b.suscriptor,
+    sucursal: SUCURSAL_DEFAULT,
+    nombre: b.nameParts.join(' ').replace(/\s+/g, ' ').trim()
+  }));
+}
+
+function addQueueItem(name){
+  const q = document.getElementById('queue');
+  const div = document.createElement('div');
+  div.className = 'qitem';
+  div.innerHTML = `<span class="fname">${name}</span><div class="bar"><i></i></div><span class="pct">0%</span>`;
+  q.appendChild(div);
+  return div;
+}
+
+document.getElementById('drop').addEventListener('dragover', e=>{ e.preventDefault(); e.currentTarget.classList.add('drag'); });
+document.getElementById('drop').addEventListener('dragleave', e=> e.currentTarget.classList.remove('drag'));
+document.getElementById('drop').addEventListener('drop', e=>{
+  e.preventDefault(); e.currentTarget.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files.length) handleFiles(e.target.files);
+  e.target.value = '';
+});
+
+async function handleFiles(files){
+  for(const file of files){
+    const item = addQueueItem(file.name);
+    item.querySelector('.bar i').style.width = '35%';
+    item.querySelector('.pct').textContent = 'leyendo…';
+    try{
+      const parsed = await extractRowsFromImage(file);
+      item.querySelector('.bar i').style.width = '100%';
+      if(parsed.length === 0){
+        item.classList.add('err');
+        item.querySelector('.pct').textContent = 'sin filas detectadas';
+      } else {
+        parsed.forEach(upsertClient);
+        item.classList.add('ok');
+        item.querySelector('.pct').textContent = parsed.length + ' clientes';
+      }
+      render();
+    }catch(err){
+      console.error(err);
+      item.classList.add('err');
+      item.querySelector('.pct').textContent = 'error de OCR';
+    }
+  }
+}
+
+document.getElementById('addManual').addEventListener('click', ()=>{
+  const suscriptor = prompt('Número de suscriptor:');
+  if(!suscriptor) return;
+  const nombre = prompt('Nombre del cliente:') || '';
+  upsertClient({ suscriptor, sucursal: SUCURSAL_DEFAULT, nombre });
+  render();
+});
+
+document.getElementById('clearAll').addEventListener('click', async ()=>{
+  if(!confirm('¿Vaciar toda la agenda? Esto borra todos los clientes guardados.')) return;
+  for(const contrato in clients) await removePersisted(contrato);
+  clients = {};
+  render();
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const rows = Object.values(clients).map(c=>({
+    'Contrato': c.contrato,
+    'Nombre': c.nombre,
+    'Teléfono': c.telefono,
+    'Contactado': c.contactado ? 'Sí' : 'No',
+    'Contestó': c.contesto ? 'Sí' : 'No',
+    'No contestó': c.noContesto ? 'Sí' : 'No',
+    'Desea más información': c.deseaInfo ? 'Sí' : 'No'
+  }));
+  if(rows.length === 0){ alert('No hay clientes para exportar.'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:14},{wch:30},{wch:16},{wch:12},{wch:10},{wch:12},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Agenda');
+  XLSX.writeFile(wb, 'agenda_cortados_' + new Date().toISOString().slice(0,10) + '.xlsx');
+});
+
+function render(){
+  const list = Object.values(clients).sort((a,b)=> (a.nombre||'').localeCompare(b.nombre||''));
+  rowsBody.innerHTML = '';
+  emptyState.style.display = list.length ? 'none' : 'block';
+  document.getElementById('statTotal').textContent = list.length;
+  document.getElementById('statContact').textContent = list.filter(c=>c.contactado).length;
+  document.getElementById('statInfo').textContent = list.filter(c=>c.deseaInfo).length;
+
+  for(const c of list){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="Contrato"><span class="contrato">${c.contrato}</span><span class="sub-id">suscriptor ${c.suscriptor}</span></td>
+      <td data-label="Nombre"><input class="cell nombre" value="${c.nombre.replace(/"/g,'&quot;')}" placeholder="Nombre del cliente"></td>
+      <td data-label="Teléfono"><input class="cell tel telefono" value="${c.telefono||''}" placeholder="998 000 0000"></td>
+      <td data-label="Estado">
+        <div class="signal">
+          <i class="${c.contactado?'on':''}"></i>
+          <i class="${c.contesto?'on':''}"></i>
+          <i class="${c.noContesto?'on':''}"></i>
+          <i class="${c.deseaInfo?'on':''}"></i>
+        </div>
+      </td>
+      <td data-label="Seguimiento">
+        <div class="flags">
+          <label class="flag"><input type="checkbox" class="fc-contactado" ${c.contactado?'checked':''}><span>Llamé</span></label>
+          <label class="flag"><input type="checkbox" class="fc-contesto" ${c.contesto?'checked':''}><span>Contestó</span></label>
+          <label class="flag"><input type="checkbox" class="fc-no-contesto" ${c.noContesto?'checked':''}><span>No contestó</span></label>
+          <label class="flag"><input type="checkbox" class="fc-info" ${c.deseaInfo?'checked':''}><span>Info</span></label>
+        </div>
+      </td>
+      <td><button class="del" title="Eliminar">✕</button></td>
+    `;
+    tr.querySelector('.nombre').addEventListener('change', e=>{ c.nombre = e.target.value; persist(c); });
+    tr.querySelector('.telefono').addEventListener('change', e=>{ c.telefono = e.target.value; persist(c); });
+    tr.querySelector('.fc-contactado').addEventListener('change', e=>{ c.contactado = e.target.checked; persist(c); render(); });
+    tr.querySelector('.fc-contesto').addEventListener('change', e=>{ c.contesto = e.target.checked; persist(c); render(); });
+    tr.querySelector('.fc-no-contesto').addEventListener('change', e=>{ c.noContesto = e.target.checked; persist(c); render(); });
+    tr.querySelector('.fc-info').addEventListener('change', e=>{ c.deseaInfo = e.target.checked; persist(c); render(); });
+    tr.querySelector('.del').addEventListener('click', async ()=>{
+      await removePersisted(c.contrato);
+      delete clients[c.contrato];
+      render();
+    });
+    rowsBody.appendChild(tr);
+  }
+}
+
+loadAll();
+</script>
+</body>
+</html>
